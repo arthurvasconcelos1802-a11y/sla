@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jogo — Light Studio's</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="admin-bar admin-only"><span>🔧 Modo admin ativo</span><button class="btn" id="logoutBtn">Sair</button></div>
+
+  <header class="hero small" id="hero"></header>
+
+  <div class="game-wrap">
+    <a class="back" href="/#games">← Voltar para os jogos</a>
+    <div class="game-head">
+      <img class="game-cover" id="cover" alt="" hidden>
+      <div>
+        <h1 id="name"></h1>
+        <div class="desc" id="desc"></div>
+        <div class="row admin-only" style="margin-top:14px">
+          <button class="btn" id="editGame">✏️ Editar nome e descrição</button>
+        </div>
+      </div>
+    </div>
+
+    <section class="panel" id="downloadPanel" hidden>
+      <h2>Download</h2>
+      <button class="btn primary big" id="downloadBtn">⬇ Baixar</button>
+    </section>
+
+    <section class="panel admin-only">
+      <h2>🔧 Arquivos (admin)</h2>
+      <div class="row">
+        <button class="btn" id="uploadCover">🖼️ Enviar capa</button>
+        <button class="btn" id="linkWin">🔗 Colar link de download (Windows)</button>
+        <button class="btn" id="uploadWin">⬆ Enviar arquivo pequeno (até 4 MB)</button>
+        <button class="btn danger" id="deleteWin" hidden>Apagar arquivo do Windows</button>
+      </div>
+      <p class="muted" id="fileInfo" style="margin:12px 0 0"></p>
+      <p class="muted" style="margin:8px 0 0">Jogos grandes: hospede o arquivo (GitHub Releases, Google Drive, Mega...) e cole o link acima. O visitante baixa pelo seu site normalmente.</p>
+      <div class="progress" id="prog" hidden><i></i></div>
+    </section>
+  </div>
+
+  <footer>
+    <div>© <span id="year"></span> Light Studio's</div>
+    <button class="linkbtn" id="adminLink">admin</button>
+  </footer>
+
+  <script src="/app.js"></script>
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+    const gameId = new URLSearchParams(location.search).get('id');
+    const PLAT_LABEL = { windows: { icon: '🪟', name: 'Windows' } };
+    const current = () => State.games.find((g) => g.id === gameId);
+
+    function render() {
+      const g = current();
+      applyBanner($('#hero'), State.site.banner);
+      if (!g) {
+        $('#name').textContent = 'Jogo não encontrado';
+        $('#desc').textContent = '';
+        $('#downloadPanel').hidden = true;
+        return;
+      }
+      document.title = g.name + " — Light Studio's";
+      $('#name').textContent = g.name;
+      $('#desc').textContent = g.description;
+      const cover = $('#cover');
+      cover.hidden = !g.cover;
+      if (g.cover) cover.src = '/uploads/' + encodeURIComponent(g.cover);
+
+      const platforms = State.platforms.filter((p) => g.files[p]);
+      $('#downloadPanel').hidden = platforms.length === 0;     // só aparece se houver arquivo enviado
+      $('#deleteWin').hidden = !g.files.windows;
+      const w = g.files.windows;
+      $('#fileInfo').textContent = w
+        ? `Windows: ${w.name}${w.type === 'link' ? ' (link externo)' : ' (' + fmtSize(w.size) + ')'}`
+        : 'Nenhum arquivo de Windows definido ainda.';
+    }
+
+    $('#downloadBtn').onclick = () => {
+      const g = current();
+      const m = modal({ title: 'Escolha seu dispositivo', body: [] , noSave: true });
+      for (const p of State.platforms) {
+        const f = g.files[p];
+        if (!f) continue;
+        const b = el('button', { class: 'platform' }, [
+          el('span', { class: 'ico' }, PLAT_LABEL[p].icon),
+          el('span', {}, [PLAT_LABEL[p].name, el('small', {}, f.type === 'link' ? f.name : `${f.name} · ${fmtSize(f.size)}`)]),
+        ]);
+        b.onclick = () => { location.href = `/download/${encodeURIComponent(g.id)}/${p}`; m.close(); };
+        m.box.insertBefore(b, m.actions);
+      }
+    };
+
+    $('#editGame').onclick = () => editGame(current(), render);
+
+    $('#uploadCover').onclick = async () => {
+      const f = await pickFile('image/*'); if (!f || tooBig(f)) return;
+      await runUpload(`/api/upload/games/${encodeURIComponent(gameId)}/cover`, f, render);
+    };
+    $('#uploadWin').onclick = async () => {
+      const f = await pickFile(''); if (!f || tooBig(f)) return;
+      await runUpload(`/api/upload/games/${encodeURIComponent(gameId)}/file/windows`, f, render);
+    };
+    $('#linkWin').onclick = () => {
+      const w = current().files.windows;
+      modal({
+        title: 'Link de download (Windows)',
+        fields: [
+          { name: 'url', label: 'Link (precisa começar com https://)', value: w && w.type === 'link' ? w.url : '' },
+          { name: 'name', label: 'Nome do arquivo que aparece pro visitante (ex: ToyFactory.zip)', value: w ? w.name : '' },
+        ],
+        onSave: async (v) => {
+          await api('PUT', `/api/games/${encodeURIComponent(gameId)}/link/windows`, v);
+          await load(); render();
+        },
+      });
+    };
+    $('#deleteWin').onclick = async () => {
+      if (!confirm('Apagar o arquivo do Windows? O botão de download some.')) return;
+      try { await api('DELETE', `/api/games/${encodeURIComponent(gameId)}/file/windows`); await load(); render(); } catch (e) { alert(e.message); }
+    };
+
+    async function runUpload(url, file, after) {
+      const prog = $('#prog'), bar = $('#prog i');
+      prog.hidden = false; bar.style.width = '0';
+      try {
+        await upload(url, file, (r) => (bar.style.width = Math.round(r * 100) + '%'));
+        await load(); after();
+      } catch (e) { alert(e.message); }
+      setTimeout(() => (prog.hidden = true), 600);
+    }
+
+    boot(render);
+  </script>
+</body>
+</html>

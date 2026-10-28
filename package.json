@@ -1,0 +1,10 @@
+{
+  "name": "light-studios-netlify",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Site do Light Studio's (versão Netlify)",
+  "dependencies": {
+    "@netlify/blobs": ">=8.0.0"
+  }
+}

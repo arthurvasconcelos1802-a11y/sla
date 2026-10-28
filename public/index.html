@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Light Studio's</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="admin-bar admin-only"><span>🔧 Modo admin ativo</span><button class="btn" id="logoutBtn">Sair</button></div>
+
+  <header class="hero" id="hero">
+    <div class="hero-inner">
+      <h1><span class="t1" id="t1"></span><span class="t2" id="t2"></span></h1>
+      <a class="scroll-hint" href="#games">↓ jogos</a>
+      <div class="hero-tools admin-only">
+        <button class="btn" id="editTitle">✏️ Editar título</button>
+        <button class="btn" id="editBanner">🖼️ Trocar banner</button>
+        <button class="btn danger" id="removeBanner">Remover banner</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <h2 class="section-title" id="games">Jogos</h2>
+    <div class="grid" id="grid"></div>
+  </main>
+
+  <footer>
+    <div>© <span id="year"></span> Light Studio's</div>
+    <button class="linkbtn" id="adminLink">admin</button>
+  </footer>
+
+  <script src="/app.js"></script>
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+
+    function render() {
+      const { site, games } = State;
+      document.title = (site.title + ' ' + site.tagline).trim() || "Light Studio's";
+      $('#t1').textContent = site.title;
+      $('#t2').textContent = site.tagline;
+      applyBanner($('#hero'), site.banner);
+
+      const grid = $('#grid');
+      grid.replaceChildren();
+      for (const g of games) {
+        const card = el('div', { class: 'card' });
+        const link = el('a', { class: 'card-link', href: '/game.html?id=' + encodeURIComponent(g.id) });
+        const cover = el('div', { class: 'cover' }, g.cover ? '' : g.name.charAt(0));
+        if (g.cover) cover.style.backgroundImage = `url(/uploads/${encodeURIComponent(g.cover)})`;
+        link.append(cover, el('div', { class: 'card-body' }, [el('h3', {}, g.name), el('p', {}, g.description)]));
+        const edit = el('button', { class: 'btn admin-only' }, '✏️ Editar jogo');
+        edit.onclick = () => editGame(g, render);
+        card.append(link, edit);
+        grid.append(card);
+      }
+    }
+
+    $('#editTitle').onclick = () => editSite(render);
+    $('#editBanner').onclick = () => changeBanner(render);
+    $('#removeBanner').onclick = async () => {
+      if (!confirm('Remover o banner de todo o site?')) return;
+      try { await api('DELETE', '/api/banner'); await load(); render(); } catch (e) { alert(e.message); }
+    };
+
+    boot(render);
+  </script>
+</body>
+</html>
