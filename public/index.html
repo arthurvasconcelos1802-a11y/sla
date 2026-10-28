@@ -23,6 +23,9 @@
 
   <main>
     <h2 class="section-title" id="games">Jogos</h2>
+    <div class="row admin-only" style="margin:-10px 0 24px">
+      <button class="btn primary" id="newGame">➕ Novo jogo</button>
+    </div>
     <div class="grid" id="grid"></div>
   </main>
 
@@ -57,6 +60,18 @@
       }
     }
 
+    $('#newGame').onclick = () => modal({
+      title: 'Novo jogo',
+      fields: [
+        { name: 'name', label: 'Nome do jogo' },
+        { name: 'description', label: 'Descrição (pode deixar vazio)', type: 'textarea' },
+      ],
+      saveLabel: 'Criar jogo',
+      onSave: async (v) => {
+        const { game } = await api('POST', '/api/games', v);
+        location.href = '/game.html?id=' + encodeURIComponent(game.id); // vai pra página dele enviar capa e arquivo
+      },
+    });
     $('#editTitle').onclick = () => editSite(render);
     $('#editBanner').onclick = () => changeBanner(render);
     $('#removeBanner').onclick = async () => {

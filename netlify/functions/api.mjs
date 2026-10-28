@@ -118,7 +118,12 @@ async function removeBlob(key) {
 // apaga o arquivo antigo só se ele foi enviado (e não é um link)
 const removeStoredFile = (f) => (f && f.type === 'upload' ? removeBlob(f.key) : undefined);
 
-const validGameId = (id) => /^[\w-]{1,60}$/.test(id || '');
+// "Welcome to the Neighborhood!" -> "welcome-to-the-neighborhood"
+function slugify(name) {
+  const s = String(name).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50);
+  return s || 'jogo';
+}
 
 // ---------- handler ----------
 export default async (req, context) => {
@@ -212,6 +217,33 @@ export default async (req, context) => {
         db.site.banner = null;
         await saveDb(db);
         return json({ site: db.site });
+      }
+
+      // criar jogo novo
+      if (m === 'POST' && p === '/api/games') {
+        const b = await req.json().catch(() => ({}));
+        const name = clean(b.name, 120).trim();
+        if (!name) return json({ error: 'Dê um nome ao jogo' }, 400);
+        if (db.games.length >= 100) return json({ error: 'Limite de 100 jogos atingido' }, 400);
+        const base = slugify(name);
+        let id = base, n = 2;
+        while (db.games.some((x) => x.id === id)) id = `${base}-${n++}`;
+        const game = { id, name, description: clean(b.description, 4000), cover: null, files: { windows: null } };
+        db.games.push(game);
+        await saveDb(db);
+        return json({ game }, 201);
+      }
+
+      // apagar jogo (e os arquivos dele)
+      mm = p.match(/^\/api\/games\/([\w-]+)$/);
+      if (m === 'DELETE' && mm) {
+        const g = db.games.find((x) => x.id === mm[1]);
+        if (!g) return json({ error: 'Jogo não encontrado' }, 404);
+        await removeBlob(g.cover);
+        for (const pf of PLATFORMS) await removeStoredFile(g.files[pf]);
+        db.games = db.games.filter((x) => x.id !== g.id);
+        await saveDb(db);
+        return json({ ok: true });
       }
 
       // nome e descrição do jogo

@@ -37,6 +37,7 @@
         <button class="btn" id="uploadWin">⬆ Enviar arquivo pequeno (até 4 MB)</button>
         <button class="btn danger" id="deleteWin" hidden>Apagar arquivo do Windows</button>
       </div>
+      <div class="row" style="margin-top:14px"><button class="btn danger" id="deleteGame">🗑 Apagar este jogo</button></div>
       <p class="muted" id="fileInfo" style="margin:12px 0 0"></p>
       <p class="muted" style="margin:8px 0 0">Jogos grandes: hospede o arquivo (GitHub Releases, Google Drive, Mega...) e cole o link acima. O visitante baixa pelo seu site normalmente.</p>
       <div class="progress" id="prog" hidden><i></i></div>
@@ -96,6 +97,12 @@
     };
 
     $('#editGame').onclick = () => editGame(current(), render);
+
+    $('#deleteGame').onclick = async () => {
+      const g = current();
+      if (!g || !confirm(`Apagar "${g.name}" para sempre? A capa e o arquivo enviados também serão apagados.`)) return;
+      try { await api('DELETE', `/api/games/${encodeURIComponent(g.id)}`); location.href = '/'; } catch (e) { alert(e.message); }
+    };
 
     $('#uploadCover').onclick = async () => {
       const f = await pickFile('image/*'); if (!f || tooBig(f)) return;
